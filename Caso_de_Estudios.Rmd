@@ -1,0 +1,217 @@
+---
+title: 'Estudio de Caso: Prima seguro medico'
+author: "Villazón"
+date: "2023-12-01"
+output: html_document
+---
+```{r include=FALSE}
+#settings
+options(scipen = 999)
+options(digits=2)
+```
+
+```{r include=FALSE}
+#Librerias
+library(xts)
+library(readxl)
+library(pastecs)
+library(psych)
+library(stargazer)
+library(ggplot2)
+library(ggcorrplot)
+library(reshape2)
+library(tidyr)
+library(tseries)
+library(car)
+library(lmtest)
+```
+
+
+```{r include=FALSE}
+#Tratamientos de Base de Datos
+DATOS <-read.csv(file.choose())
+DATOS <- DATOS[-6]
+#Convertir sexo en una variable dicotómica
+DATOS$sex <- ifelse(DATOS$sex == "female", 1, 0)
+#Convertir cigarillo en una variable dicotómica
+DATOS$smoker <- ifelse(DATOS$smoker == "yes", 1, 0)
+
+```
+
+Estadística descriptiva
+
+```{r echo=FALSE,results='asis'}
+stats <- matrix(data = NA,nrow = 9 ,ncol = (dim(DATOS)[2]))
+for (i in 1:dim(DATOS)[2]) {
+  stats[1,i] <- min(DATOS[,i], na.rm = TRUE)
+  stats[2,i]<- quantile(DATOS[,i], probs = 0.25, na.rm = TRUE)
+  stats[3,i] <- mean.default(DATOS[,i], na.rm = TRUE)
+  stats[4,i] <- var(DATOS[,i], na.rm = TRUE)
+  stats[5,i]<- sd(DATOS[,i], na.rm = TRUE)
+  stats[6,i]<- quantile(DATOS[,i], probs = 0.75, na.rm = TRUE)
+  stats[7,i]<- max(DATOS[,i], na.rm = TRUE)
+  stats[8,i] <- skew(DATOS[,i])
+  stats[9,i] <- kurtosi(DATOS[,i])
+  
+}
+ 
+
+colnames(stats) <- c("Age","Sex","BMI","Children","Smoker","Charge")
+rownames(stats) <- c("Min","Q1","Mean","Var","Sd","Q3","max","Skew","Kurt")
+stargazer(stats, title = "Estadisticas Descriptivas",digits=2,notes.align = "l", type = "html")
+```
+
+HISTOGRAMAS
+
+```{r echo=FALSE}
+DATOSPLOT <- melt(DATOS,measure.vars = c('age', 'sex', 'bmi', 'children', 'smoker',"charges"))
+ggplot(DATOSPLOT, aes(x = value)) +
+  geom_histogram(bins = 10, fill = "skyblue", color = "black") +
+  facet_wrap(~ variable, scales = 'free_x') +
+  xlab("") + 
+  ylab("Frecuencia") +
+  ggtitle("Histogramas de Variables")
+
+```
+VARIABLES EN RELACION A LA PRIMA DEL SEGURO
+
+```{r echo=FALSE}
+DATOSPLOT2 <- melt(DATOS,measure.vars = c('age', 'bmi'))
+ggplot(DATOSPLOT2, aes(x=value,y = charges)) +
+  geom_point() +
+  facet_wrap(~ variable) +
+  scale_x_continuous(limits = c(0, 64),
+                     breaks = seq(0, 64, by = 5),
+                     labels = scales::comma)+
+  xlab("") + 
+  ylab("Prima de seguro medico") +
+  ggtitle("Variables Independientes con respecto al cargo de la prima de seguro medico")
+
+```
+```{r echo=FALSE}
+DATOSPLOT2 <- melt(DATOS,measure.vars = c('sex',  'children', 'smoker'))
+ggplot(DATOSPLOT2, aes(x=value,y = charges)) +
+  geom_point() +
+  facet_wrap(~ variable) +
+  scale_x_continuous(limits = c(0, 5),
+                     breaks = seq(0, 5, by = 1),
+                     labels = scales::comma)+
+  xlab("") + 
+  ylab("Prima de seguro medico") +
+  ggtitle("Variables Independientes con respecto al cargo de la prima de seguro medico")
+
+```
+Correlación entre variables
+```{r echo=FALSE}
+# Correlation
+model.matrix(~0+., data=DATOS) %>% 
+  cor(use="pairwise.complete.obs") %>% 
+  ggcorrplot(show.diag = F, type="lower", lab=TRUE, lab_size=2, 
+             colors = c("#EA063D", "white", "#3498DB"),title = "Matriz de Correlaciones de las Variables") 
+```
+
+
+Regresión
+```{r echo=FALSE,results='asis'}
+reg_1 <- lm((charges) ~ (age) + (sex) + (bmi) + (children)  + smoker , data = DATOS)
+
+stargazer(reg_1,title="Reporte de los coeficientes de la regresion",type = "html")
+```
+
+
+```{r echo=FALSE,results='asis'}
+
+#summary(reg_1)
+stargazer(reg_1,title="Reporte de los t-valores y p-valores de los coeficiente",omit.stat = c("n", "rsq", "adj.rsq", "f", "ser"),report = "vtp",type = "html")
+
+```
+
+Matriz Varcov
+```{r echo=FALSE,results='asis'}
+stargazer(vcov(reg_1),digits = 0,title = "Matriz Varcov de los Coeficientes del Modelo de Regresion",type = "html")
+```
+
+
+
+```{r echo=FALSE}
+meltvarcov <-melt(vcov(reg_1))
+ggplot(meltvarcov, aes(Var1, Var2, fill = value)) +
+  ggtitle("Grafico de Calor de Matriz Var-Cov")+
+  geom_tile() +
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
+                       midpoint = 0, limit = c(min(meltvarcov$value), max(meltvarcov$value))) +
+  theme_minimal() +
+  labs(fill = "Varianza-Covarianza", x = "Variable", y = "Variable") +
+  coord_fixed()
+```
+Supuestos de la Regresión-Comportamientos de los Residuales
+
+Multicolinealidad
+
+```{r echo=FALSE,results='asis'}
+stargazer(vif(reg_1),type = "html")
+```
+
+
+Normalidad de los Residuos
+
+```{r echo=FALSE}
+residuales <- resid(reg_1)
+ggplot(data.frame(residuales), aes(x = residuales)) +
+  geom_histogram(binwidth = 1000, fill = "#3498DB",color="black") +
+  labs(title = "Histograma de Residuales", x = "Residuales", y = "Frecuencia") +
+  theme_minimal()
+```
+
+```{r echo=FALSE,results='asis'}
+jb_test <- jarque.bera.test(residuales)
+tabla_jb <- matrix(data = NA,nrow = 2,ncol = 1)
+tabla_jb[1,] <- jb_test$statistic
+tabla_jb[2,] <- jb_test$p.value
+colnames(tabla_jb) <- "Value"
+rownames(tabla_jb) <- c("Estadistico","p.valor")
+stargazer(tabla_jb,title = "Test de Jarque-Bera",type = "text")
+```
+
+
+No Auto correlación
+
+```{r echo=FALSE,results='asis'}
+db <- durbinWatsonTest(reg_1)
+tabla_db <- matrix(data = NA,nrow =3,ncol = 1)
+tabla_db[1,] <- db$r
+tabla_db[2,] <- db$dw
+tabla_db[3,] <- db$p
+colnames(tabla_db) <- "Value"
+rownames(tabla_db) <- c("Autocorrelacion","D-W Estadistico","P-valor")
+stargazer(tabla_db,title = "Test de Durwin-Watson",type = "html")
+```
+Homocedasticidad
+
+
+```{r echo=FALSE,results='asis'}
+res2 <- residuales^2
+ygorro <- fitted.values(reg_1)
+
+DATOSPLOT3 <-data.frame(res2,ygorro)
+ggplot(DATOSPLOT3, aes(x = ygorro, y = res2)) +
+  geom_point() +
+  ggtitle("Residuales al cuadrado vs valores Ajustados")+
+  theme_minimal() +
+  xlab("Valores Ajustados") +
+  ylab("Residuales al Cuadrado")
+```
+
+```{r echo=FALSE,results='asis'}
+#Test Bresuch-pagan
+bp <- bptest(reg_1)
+tabla_bp <- matrix(data = NA,nrow =3,ncol = 1)
+tabla_bp[1,] <- bp$statistic
+tabla_bp[2,] <- bp$parameter
+tabla_bp[3,] <- bp$p.value
+colnames(tabla_bp) <- "Value"
+rownames(tabla_bp) <- c("BP","DF","P-valor")
+stargazer(tabla_bp,title = "Test de Breusch-Pagan",type = "html")
+```
+
+

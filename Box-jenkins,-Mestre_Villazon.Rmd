@@ -1,0 +1,849 @@
+---
+title: "Box-Jenkins"
+author: "Mestre-Villazón"
+date: "2023-03-28"
+output:
+  html_document:
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+    collapsed: yes
+    smooth_scroll: yes
+    theme: journal
+    highlight: kate
+    df_print: paged
+    code_folding: show
+  pdf_document:
+    toc: yes
+    toc_depth: '3'
+---
+
+# Preambulo
+
+Instalamos Los paquetes necesarios para el desarrollo de la simulación.
+```{r}
+source(file.choose())
+#install.packages("tseries")
+library(tseries)
+#install.packages("readxl")
+library(readxl)
+#install.packages("forecast")
+library(forecast)
+```
+
+# Simulación
+
+Se plantea una simulación de un modelo ARIMA(p,d,q) con un horizonte temporal
+de N=1000. para la selección de parámetros p y q, se realizará un sondeo 
+aleatorio tomando en cuenta como semilla el código de estudiante. En este caso
+se tomará en cuenta el código del estudiante "0000212503".
+
+
+```{r}
+set.seed(0000212503)
+p<-round(runif(1, min=0, max=6))
+p
+
+set.seed(000021250)
+q<-round(runif(1, min=0, max=6))
+q
+```
+$$
+p=5
+$$
+$$
+q=0
+$$
+
+
+Por tanto el proceso a realizar es un ARIMA(5,0,0)
+
+$$
+y_t=\beta_a+\phi_1 y_{t-1}+\phi_2y_{t-2}+\phi_3y_{t-3}+\phi_4y_{t-4}+\phi_5y_{t-5}+a_t
+$$
+
+
+
+
+```{r}
+#Simulacion
+#Tamaño de la simulacion
+N <- 996
+
+#Valores Iniciales
+y1 <- 225
+y2 <- 225.26
+y3 <- 225.34
+y4 <- 225.46
+y5 <- 225.54
+
+#Beta
+beta <- 48.97
+
+#Parametros AR
+
+phi1 <- 1
+phi2 <- -0.018
+phi3 <- -0.16
+phi4 <- 0.014
+phi5 <- -0.012
+
+tendencia <- 0.5*seq(1:1000)
+estacionalidad <- c(rep((c(0.80,0.50,0.30,0.45,0.8,0.6,0.45,0.80,0.24,0.30,0.40,0.6)),83),0.80,0.50,0.30,0.45)
+
+#Ruido Blanco
+set.seed(210)
+a <- rnorm(n=(N+1),mean = 0,sd = 80)
+
+# El proceso
+y <- c(y1,y2,y3,y4,y5)
+for(t in 6:N){
+  y[t]=(beta+phi1*y[t-1]+phi2*y[t-2]+phi3*y[t-3]+phi4*y[t-4]+phi5*y[t-5]+a[t]+
+          tendencia[t]+estacionalidad[t] )}
+
+
+# Fechas mensuales
+Fechas <- seq(from=as.Date("2001/01/01"),by="month",along.with=y)            
+#Proceso decompose con el que se comparara el proceso
+Base.ts=ts(y,start=2001,frequency = 12)
+```
+
+## Observando la serie
+```{r}
+par(las=2,cex.lab=0.8,cex.axis=0.7,font.main=15,font.axis=14,font.lab=14,font.sub=14,cex.sub=0.7,bty="l",col="grey40",mfrow=c(1,2))
+plot(Fechas,y,type="l",main="Serie Simulada Mensual"
+     ,sub="Figura 1. Serie original",xlab="",ylab="")
+plot(Base.ts,type="l",main="Serie Simulada Mensual"
+     ,sub="Figura 2. Serie original; Base.ts",xlab="",ylab="")
+```
+
+# Desestacionalizamos la Serie
+
+## Media Móvil
+
+```{r}
+mum <- function(z,k){
+  N <- length(z)
+  
+  MUM <- matrix(data = NA,ncol = 1,nrow=N)
+  
+  for (i in 1:(N-k)) {
+    
+    MUM[k+i] <- sum(z[i:(i+k-1)])/k
+    
+    
+  }
+  return(MUM)
+}
+
+mm <- mum(y,12) #Media Movil
+
+
+par(las=2,cex.lab=0.8,cex.axis=0.7,font.main=15,font.axis=14,font.lab=14,font.sub=14,cex.sub=0.7,bty="l",col="grey40",mfrow=c(1,2))
+plot(Fechas,mm,
+     type = "l",
+    xlab = "",
+    ylab="Media movil",
+    main="Ciclo + Tendencia",
+    sub="Figura #3 Ciclo + Tendencia ")
+plot(decompose(Base.ts)$trend,
+     type = "l",
+     xlab = "",
+     ylab="Media movil",
+     main="(Ciclo + Tendencia) Funcion",
+     sub= "Figura #4 Ciclo + Tendencia;Base.ts ")
+
+```
+
+## Ditrend
+
+```{r}
+
+
+ditrend <- y-mm
+
+N <- length(ditrend)
+
+muest <- function(z,K){
+
+  N <- length(z)
+  
+  estacionalidad <- matrix(data = NA,nrow =K)
+ 
+  for (i in 1:(K)) {
+  
+  estacionalidad[i] <- sum(na.omit(z[seq(from=i,to=N,by=K)]))/length(na.omit(z[seq(from=1,to=N,by=12)]))
+  
+  }
+  return(estacionalidad)
+}
+
+st<- muest(ditrend,12) 
+```
+
+## Seasonal
+```{r}
+#Seasonal
+sts <- as.matrix(rep(st,83))
+par(las=2,cex.lab=0.8,cex.axis=0.7,font.main=15,font.axis=14,font.lab=14,font.sub=14,cex.sub=0.7,bty="l",col="grey40",mfrow=c(1,2))
+plot(Fechas,sts,
+     type = "l",
+     xlab = "",
+     ylab="",
+     main="Estacionalidad",
+     sub = "Figura #5 Estacionalidad Mensual")
+plot(decompose(Base.ts)$seasonal,
+     type = "l",
+     xlab = "",
+     ylab="",
+     main="Estacionalidad Funcion",
+     sub= "Figura #6 Estacionalidad Mensual;Base.ts")
+```
+
+## Componente Aletatorio
+
+```{r}
+#Componente Aletatorio
+ca <- (y-mm)- sts
+par(las=2,cex.lab=0.8,cex.axis=0.7,font.main=15,font.axis=14,font.lab=14,font.sub=14,cex.sub=0.7,bty="l",col="grey40",mfrow=c(1,2))
+plot(Fechas,ca,
+     type = "l",
+     xlab = "",
+     ylab="",
+     main="Componente Aletatorio",
+     sub = "Figura #7 componente Aleatorio" )
+plot(decompose(Base.ts)$random,
+     type = "l",
+     xlab = "",
+     ylab="ca",
+     main="Componente Aletatorio funcion",
+     sub= "Figura #8 componente Aleatorio; Base.ts")
+
+```
+
+## Serie desestacionalizada
+
+```{r}
+y_desestacionalizado <- y-sts
+par(las=3,cex.lab=0.8,cex.axis=0.7,font.main=15,font.axis=14,font.lab=14,font.sub=14,cex.sub=0.7,bty="l",col="grey40",mfrow=c(1,3))
+plot(Fechas,y_desestacionalizado,
+     type = "l",
+     xlab = "",
+     ylab="Serie Desestacionalizada",
+     main="Serie Desestacionalizada",
+     sub="Figura #8 Serie Desestacionalizada Funcion")
+plot((decompose(Base.ts)$x-decompose(Base.ts)$seasonal),type="l",main="Serie Desestacionalizada Funcion",sub= "Figura #9 Serie Desestacionalizada; Base.ts"
+    ,xlab="",ylab="")
+plot(Fechas,y,type="l",main="Serie Simulada Original"
+     ,sub="Figura 1. Serie original",xlab="",ylab="")
+
+```
+
+# Estabilización de Varianza
+
+Con el objetivo de poder estabilizar la varianza de la serie $$z_t$$ se eleva a
+una potencia lambda con el objetivo de que se cumpla la siguiente condición:
+
+
+$$
+\frac{\sigma_t}{(\mu_t^{1-\lambda})}=constante ;\forall=1,...,T
+$$
+
+Para encontrar dicha varianza se ubicara el menor coeficiente de variación Lambda.
+
+$$
+CV(\lambda)=\frac{SD(\lambda)}{M(\lambda)}; M(\lambda)= \sum_{h=1}^{H}\frac{S_h}{(Z_h^{1-\lambda})}; SD(\lambda)=\frac{\sqrt{\sum_{h=1}^{H}{[S_h/(Z_h^{1-\lambda})- M(\lambda)}]^2}}{(H-1)}
+$$
+
+```{r}
+#Estabilizacion De varianza
+est.Var <- function(zt,R,lambdas){
+  
+  N <- as.numeric(length(zt)) #Observaciones
+  H <- trunc(N/R) #No Grupos
+  n <- N-H*R # No Observaciones excluidas+
+  
+  
+  # Calcular las Medias y desviacion Para cada Grupo -------------------------------------
+  
+  
+  MATH <- matrix(data = zt[1:(H*R)],ncol = H,nrow = R, byrow = FALSE) #Datos organizados por Grupos
+  VMU <- matrix(data=NA,nrow = 1,ncol = H) #Media de cada Grupo
+  VS <- matrix(data=NA,nrow = 1,ncol = H)#Desviacion de cada Grupo
+  
+  for (i in 1:H) {
+    VMU[i] <- media(MATH[,i])#Reiteracion de media para cada grupo
+    VS[i] <-sqrt(varianza(MATH[,i])) #Reiteracion de desviacion para cada grupo
+  }
+  
+  
+  # Coeficiente de Variacion ------------------------------------------------
+  
+  
+  L <- length(lambdas) #Observaciones Lambdas
+  CVH <-  c()
+  VMUL <- c() #Vector Media con potencia lambda 
+  VSL <-c()#Vector Desviación con potencia lambda
+  VCV <- c()#Vector Coeficiente de variacion con potencia lambda
+  
+  for (l in 1:L) {
+    for(h in 1:H){
+      CVH[h] <- VS[h]/(VMU[h]^(1-lambdas[l])) #Coeficiente de variacion del grupo con potencia Lambda
+    }
+    VMUL[l] <- media(CVH)
+    VSL[l] <- sqrt(varianza(CVH))
+    VCV[l] <- VSL[l]/VMUL[l] # Coeficiente de variacion del lambda
+  }
+  CV<- as.matrix(VCV,ncol=1)
+  CV <- t(CV)
+  rownames(CV) <- "CV"
+  colnames(CV) <- (lambdas)
+  print(CV)
+}
+R=12
+lambdas <- c(-2,-1.5,-1,-0.5,0,0.5,1,1.5,2)
+
+est.Var(y_desestacionalizado,R,lambdas)
+
+
+```
+# Estabilizacion en Nivel
+
+Se sugiere una Estabilización en nivel para encontrar un modelo estacionario,
+con esto en mente se buscaran las diferenciaciones necesarias de la de serie
+que permitan estabilizar el modelo de mejor manera
+
+```{r}
+#Estabilizacion en Nivel
+est.nivel <- function(zt){
+  S <- matrix(data = NA,nrow = 1,ncol = 4)
+  rownames(S) <- "S"
+  colnames(S) <- c("S0","S1","S2","S3")
+  
+  
+  S[,1] <- sqrt(varianza(zt))
+  ztd <- zt
+  for (i in 1:3) {
+    
+    ztd<- Diff(ztd,1)
+    S[,i+1] <- sqrt(varianza(ztd))
+  }
+  print(S)
+}
+est.nivel(y_desestacionalizado^(1)) 
+```
+Se sugiere una diferenciación para que se cumpla la mejor estacionariedad en la
+serie.
+
+# Transformación de la Serie
+```{r results='hide' }
+G_y <- y_desestacionalizado^(1)
+DG_y <- Diff(G_y,1)
+
+```
+
+```{r}
+par(las=2,cex.lab=0.8,cex.axis=0.7,font.main=15,font.axis=14,font.lab=14,font.sub=14,cex.sub=0.7,bty="l",col="grey40",mfrow=c(1,2))
+plot(Fechas,y,type="l",main="Serie Simulada Mensual",sub="Figura #1 Serie original",xlab="",ylab="")
+plot(DG_y,type="l",main="Serie DG_y (lambda 1.5,1 dif)",
+     sub="Figura #10 Serie transformada",xlab="",ylab="")
+```
+
+## Prueba de estacionariedad
+
+```{r}
+adf.test(DG_y)
+```
+
+Se confirma mediante el Dickey-Fuller test que no existe una raiz unitaria, Por
+tanto, el proceso es estacionario.
+
+## Identificacion del Modelo 
+
+### ACF
+```{r}
+#ACF
+RHOK <- function(z,K){
+  RHO <- c()
+  RHO[1] <-1 
+  for (k in 1:K) {
+    RHO[k+1] <- sum((z[1:(length(z)-k)]-media(z))*(lag(z,k)-media(z)))/sum((z-media(z))^2)
+  }  
+  print(RHO) 
+}
+#Para los primeros 20 terminos...
+rhok <- RHOK(DG_y,20)
+
+Autocorrelograma_ACF <- function(rhok,DG_y){
+  n <- length(DG_y)
+  
+  varrhok <- c()
+  varrhok[1] <- abs(2*sqrt((1+2*sum(0^2))/n))
+  i <- 1
+    while (abs(2*sqrt((1+2*sum(rhok[2:(i+1)]^2))/n))<abs(rhok[2+i])) {
+    i <- i+1
+    varrhok[i+1] <- abs(2*sqrt((1+2*sum(rhok[2:(i+1)]^2))/n))
+    }
+  varrhok <- na.omit(varrhok)
+  plot(rhok,type = "h",xlab = "Rho",main = "ACF", sub= "Figura #11 ACF")
+  abline(0,0)
+  for (i in 1:length(varrhok)) {
+    abline(a=(varrhok[i]),b = 0,col="blue",lty="dashed") 
+    abline(a=(-varrhok[i]),b = 0,col="blue",lty="dashed") 
+  }      
+}     
+par(las=2,cex.lab=0.8,cex.axis=0.7,font.main=15,font.axis=14,font.lab=14,font.sub=14,cex.sub=0.7,bty="l",col="grey40",mfrow=c(1,2))
+Autocorrelograma_ACF(rhok,DG_y)
+acf(DG_y)
+```
+
+
+Observando el Autocorrelograma de la ACF se observa que los rhos tienen
+significancia hasta Rho6, por lo que se sugiere para el modelo ARIMA que 
+la parte media móvil sea de orden p=6
+
+### PACF
+
+```{r}
+#PACF
+crammer.f <- function(GRHOS,kk){ 
+  MAT <- matrix(data = NA,nrow = kk,ncol=kk)
+  for (i in (1:kk)) {
+    for (j in 1:kk) {
+      MAT[i,j]<- as.numeric(GRHOS[abs(j-i)+1])
+    }
+  }
+  
+  MATNUM <- MAT 
+  MATNUM[,kk] <- as.numeric(GRHOS [2:(kk+1)])
+  crammer <- det(MATNUM)/det(MAT)
+  
+  return(crammer) 
+}
+
+
+PHIKK <- function(GRHOS,kk){
+  
+  FACP <- c()
+  
+  for (i in 1:kk) {
+    
+    FACP[i] <- crammer.f(GRHOS,i)
+    
+  }
+  return(FACP)
+}
+
+Autocorrelograma_PACF <- function(PHIKK,DG_y){
+  DESVPHIKK <- 2/sqrt(length(DG_y))
+  
+  plot(PHIKK,type = "h",xlab = "Rho",main = "PACF",sub= "Figura #12 PACF")
+  abline(0,0)
+  abline(DESVPHIKK,0,col="blue",lty="dashed")
+  abline(-DESVPHIKK,0,col="blue",lty="dashed")
+ 
+}
+
+phikk <- PHIKK(rhok,20)
+
+par(las=2,cex.lab=0.8,cex.axis=0.7,font.main=15,font.axis=14,font.lab=14,font.sub=14,cex.sub=0.7,bty="l",col="grey40",mfrow=c(1,2))
+Autocorrelograma_PACF(phikk,DG_y)
+pacf(DG_y)
+
+```
+
+Observando el autocorrelograma de la PACF se puede asumir que por la 
+significancia de los Rhos, el factor autorregresivo del modelo es de orden p=1
+
+## Propuestas del Modelo ARIMA
+
+I. Observando la ACF del modelo, se concluye que esta se corta en el rezago 6
+, por lo tanto, el factor de media móvil se sugiere que sea de orden q=6. Este se 
+podría considerar como un MA muy alto dado a que la simulación parte de una 
+ARIMA (5,0,0). Por otra parte, observando la ACF, esta se corta en el rezago 1
+, sugiriendo un factor auto regresivo de orden p=1.
+
+* ARIMA (1,0,6)
+
+II. Otro modelo sugerido es el ARIMA (5,0,0) dado a que este es el ARIMA teorico
+mediante el cual se simulo la serie
+
+* ARIMA (5,0,0)
+
+
+##Estimamos los modelos Arima 
+```{r}
+modelo1 <- arima(DG_y,c(1,0,6),method = "ML")
+res1 <- modelo1$residuals
+modelo1
+modelo2 <- arima(DG_y,c(5,0,0),method = "ML")
+res2 <- modelo2$residuals
+modelo2
+```
+
+
+# Comportamiento de los Residuales
+
+## Media Cero
+
+$$
+m(\hat{a})= \frac{\sum^{T}_{t=t´}\hat{a_{t}}}{T-d-p}\hat{\sigma}^2;{\hat{\sigma}^2=\sqrt\frac{\sum^{T}_{t=t´}(\hat{a_{t}}-m(\hat{a}))^2}{T-d-p}}
+$$
+Por lo tanto si
+
+H0: la media de (a_t) es igual a 0
+Ha: Violación del supuesto de media 0
+
+$$
+|\frac{\sqrt{T-d-p}*m(\hat{a})}{\hat{\sigma}^2}| <2
+$$
+
+Modelo1
+```{r}
+#Media Cero
+mu_cero <- function(modelo,p,d,q){
+  res <- modelo1$residuals
+  
+  N <- length(res)
+  
+  mu <- (sum(res[(d+p+1):N]))/(N-d-p) # Media estimada de los residuos
+  sg <- sqrt(sum((res-mu)^2)/(N-d-p-q)) # Sigma estimado de los residuos
+  
+  estadistico <- if((abs(sqrt(N-d-p)*mu/sg))<2){print("No se rechaza H0")}else {"Se rechaza H0"}
+  
+} 
+mu_cero(modelo1,1,0,6)
+```
+
+Modelo2
+```{r}
+#Media Cero
+mu_cero(modelo2,5,0,0)
+```
+
+## Varianza Constante
+
+```{r}
+#II.Varianza Constante
+par(las=3,cex.lab=0.8,cex.axis=0.7,font.main=15,font.axis=14,font.lab=14,font.sub=14,cex.sub=0.7,bty="l",col="grey40",mfrow=c(1,2))
+plot(Fechas[-1],modelo1$residuals,type="l",ylab="Residuales",xlab="",main="Residuales",sub= "Figura #13 Residuales")
+plot(Fechas[-1],modelo2$residuals,type="l",ylab="Residuales",xlab="",main="Residuales",sub="Figura #14 Residuales. Base.ts")
+
+```
+
+
+## Independencia
+
+Implica que no haya autocorrelacion entre los erorres.
+
+$$
+\hat{\rho}_k(\hat{a})=0; \forall\neq0
+$$
+
+### Significancia Individual
+
+$$
+\hat{\rho}_k(\hat{a})=\frac{\sum^{T-k}_{t=t´}\hat{a_t}\hat{a_{t+k}}}{\sum^{T-k}_{t=t´}\hat{a_t}^2}; k=1,2,3
+$$
+Se demostrará significancia Individual de las autocorrelaciones de los residuos
+si
+
+$$
+\hat{\rho}_k(\hat{a})\geq \frac{1}{\sqrt{T-d-p}}
+$$
+Es decir que la k-esima autocorrelación es significativamente diferente de 0
+
+Modelo1
+
+```{r}
+independencia_individual <- function(modelo,d,p,k){
+  res <- modelo1$residuals
+  n <- length(res)
+  n_ita <- d+p+1
+  rhok_res <- c()
+  test <- c() #Significancia individual
+  for (i in 1:k) {
+    rhok_res[i] <- sum(res[n_ita:(n-i)]*res[(n_ita+i):n])/sum(res[n_ita:n]^2)  
+    if (abs(rhok_res[i])<(1/sqrt(n-n_ita))) {test[i] <-"H0"}else{test[i] <-"H1"}
+  }
+  return(rbind(rhok_res,test))
+}
+independencia_individual(modelo1,0,1,20)
+```
+Modelo 2
+```{r}
+
+independencia_individual(modelo2,0,5,20)
+```
+
+### Significancia Global
+
+ljung box
+$$
+Q´=(T-d-p)(T-d-p+2)\frac{\sum^{K}_{k=1}({\hat{\rho}_k(\hat{a})})^2}{T-d-p-k}
+$$
+
+
+Modelo 1
+```{r}
+rhok_res1 <- as.numeric(independencia_individual(modelo1,0,1,20)[1,])
+
+ljung_box <- function(modelo1,rhok_res,p,d,q) {
+  
+  res <- modelo1$residuals
+  N <- length(res)
+  mu_rhok <- c()
+  for (i in 1:length(rhok_res)) { mu_rhok[i] <- (rhok_res[i]^2/(N-d-p-i))}
+  Q <- (N-d-p)*(N-d-p+2)*sum(mu_rhok)
+  pvalue <- (1-pchisq(Q,(length(rhok_res)-p-q)))
+  ljb <- rbind(Q,pvalue)
+  rownames (ljb)<- c("Chi-Cuadrado","P-value")
+  colnames(ljb) <- c("Ljung-Box")
+  return(ljb)
+} 
+ljung_box(modelo1,rhok_res1,1,0,6)
+
+# Comparando con la de R
+#Box.test(res, type = c("Ljung-Box"))
+```
+Modelo2
+```{r}
+rhok_res2 <- as.numeric(independencia_individual(modelo2,0,5,20)[1,])
+
+
+ljung_box(modelo1,rhok_res2,5,0,0)
+
+# Comparando con la de R
+#Box.test(res2, type = c("Ljung-Box"))
+```
+
+## Normalidad
+
+Si la media de los residuos es cero, a lo  más un total de
+$$
+\frac{(𝑇−𝑑−𝑝)}{20}
+$$
+observaciones estarán por fuera del intervalo  
+$$
+(-2\hat{\sigma}_a,2\hat{\sigma}_a)
+$$
+Modelo1
+```{r}
+#IV Normalidad
+normalidad <- function(modelo){
+  res <- modelo$residuals
+  n <- length(res)
+  limsup <- media(res)+2*sqrt(varianza(res))
+  liminf <- media(res)-2*sqrt(varianza(res))
+  k <- 0
+  for (i in 1:n) {
+    if(res[i]<limsup & res[i]>liminf){k = k+1}
+  }
+  normalidad <- (k)/n*100
+  return(normalidad)
+}
+normalidad(modelo1)
+hist(res1,main = "Histograma",sub= "Figura #15 Histograma modelo 1")
+
+
+```
+Modelo2
+
+
+
+```{r}
+#IV Normalidad
+
+normalidad(modelo2)
+hist(res2,main = "Histograma",sub= "Figura #16 Histograma modelo2")
+
+
+```
+
+### Jarque-Bera
+
+$$
+ JB = \frac{N}{6}*(S^2*\frac{1}{4}*(k-3)^2)
+$$
+Modelo1
+```{r}
+#JB
+
+JB <- function(res){
+  
+  N <- length(res)
+  mu <- media(res)
+  var <- varianza(res)  
+  sim <- ((sum((res-mu)^3))/(var^(3/2)))/N
+  kurt <-((sum((res-mu)^4))/(var^(4/2)))/N   
+  
+  jarquebera <- (N/6)*((sim^2)+((1/4)*((kurt-3)^2)))
+  pvalor <- 1-pchisq(jarquebera,2)
+  vc <- (qchisq(1-0.05,2))
+  pv <- t(rbind(pvalor,0.05))
+  jb_vc <- t(rbind(jarquebera,vc))
+  
+  jb <- (rbind(jb_vc,pv))
+  rownames(jb) <- c("Estadisticos","%")
+  return(jb)
+}
+
+JB(res1)
+  
+```
+Modelo2
+```{r}
+JB(res2)
+```
+
+## No existencia de Aberraciones Anormales
+Un residuo que se encuentra por fuera del intervalo
+
+$$
+(-3\hat{\sigma}_a,3\hat{\sigma}_a)
+$$
+implica que sucedió un evento con una probabilidad muy pequeña o que el residuo corresponde a una
+observación que no fue generada por el mismo DGP.
+
+
+Modelo1
+```{r}
+insolito <- function(modelo){
+  res <- modelo$residuals
+  n <- length(res)
+  limsup <- media(res)+3*sqrt(varianza(res))
+  liminf <- media(res)-3*sqrt(varianza(res))
+  k <- 0
+  for (i in 1:n) {
+    if(res[i]<limsup & res[i]>liminf){k = k+1}
+  }
+  aberrante <- (n-k)
+  return(aberrante)
+}  
+
+insolito(modelo1)  
+```
+Modelo2
+```{r}
+
+insolito(modelo2)  
+```
+## Parsimonia
+
+$$
+\hat{\delta}-2\sqrt{\hat{VAR}(\hat{\delta})},\hat{\delta}+2\sqrt{\hat{VAR}(\hat{\delta})} ; \hat{\delta}[\hat{\theta} y \hat{\phi}]
+$$
+
+Modelo1
+```{r}
+#VI Parsimonia  
+parsimonia <- function(modelo){
+coef <- as.numeric(modelo$coef) #Coeficientes
+varcoef <- as.numeric(diag(modelo$var.coef))
+
+
+parsimonia <- c()
+for (i in 1:length(coef)) {
+  if (((coef[i]+2*sqrt(varcoef[i]))>0) & (coef[i]-2*sqrt(varcoef[i])>0)|
+      (coef[i]+2*sqrt(varcoef[i])>0) & (coef[i]-2*sqrt(varcoef[i])>0))
+  {parsimonia[i] <- "Parsimonioso"}else{parsimonia[i] <- "NO Parsimonioso"}
+}
+parsimonia <- cbind(coef,parsimonia)    
+return(parsimonia)  
+}
+parsimonia(modelo1)
+
+```
+Modelo2
+```{r}
+parsimonia(modelo2)
+```
+
+## Admisibilidad
+
+modelo1
+```{r}
+#VII Admisibilidad
+admisibilidad <- function(modelo){
+  coef <- as.numeric(modelo$coef) #Coeficientes
+  admisibilidad <- c()
+   for (i in 1:(length(coef)-1)) {
+    if (coef[i]<1)
+    {admisibilidad[i] <- "Admisible"}else{admisibilidad[i] <- "Inadmisible"}
+  }
+  admisible <- cbind(coef[1:(length(coef)-1)],admisibilidad)
+  colnames(admisible) <- c("Parametros","Admisibilidad")
+  rownames(admisible) <- rownames(coef[1:(length(coef)-1)])
+  return(admisible)  
+}
+admisibilidad(modelo1)
+
+```
+modelo2
+```{r}
+#VII Admisibilidad
+
+admisibilidad(modelo2)
+
+```
+
+```
+
+```
+## Estabilidad
+
+$$
+\frac{\hat{cov(\hat{\phi}\hat{\theta})}}{\sqrt{var{\hat{\theta}}*var{\hat{\theta}}}} = \frac{\sqrt{(1-\hat{\phi}^2)*(1-\hat{\theta}^2)}}{(1-\hat{\theta}\hat{\phi})}
+$$
+
+
+
+Modelo1
+```{r}
+#Estabilidad
+
+estabilidad <- function(modelo1){
+coef <- modelo1$coef
+N <- length(coef)
+varcov <- modelo1$var.coef
+correlaciones <- matrix(data=NA,nrow = N,ncol=N )
+for (i in 1:N) {
+  for (j in 1:N) {
+    correlaciones[i,j] <- varcov[i,j]/(sqrt(varcov[i,i])*sqrt(varcov[j,j]))
+}}
+colnames(correlaciones) <- colnames(varcov)
+rownames(correlaciones) <- rownames(varcov)
+return(correlaciones)
+}
+estabilidad(modelo1 )
+
+```
+
+Del modelo 1 se observa que existe una baja correlación entre las variables, por 
+tanto no son redundantes.
+
+Modelo2
+```{r}
+#Estabilidad
+
+estabilidad(modelo2 )
+
+```
+
+Del modelo 2 se observa que existe una baja correlación entre las variables, por 
+tanto no son redundantes.
+
+# Pronostico
+
+```{r}
+pronostico<- forecast(modelo1)
+pronostico2<- forecast(modelo2)
+
+par(las=2,cex.lab=0.8,cex.axis=0.7,font.main=15,font.axis=14,font.lab=14,font.sub=14,cex.sub=0.7,bty="l",col="grey40",mfrow=c(1,2))
+plot(pronostico, main="Pronóstico Modelo1",
+ylab="",xlab="",sub= "Figura #17 Pronostico Arima")
+plot(pronostico2, main="Pronóstico Modelo1",
+ylab="",xlab="",sub= "Figura #18 Pronostico2 Arima")
+```
+
+

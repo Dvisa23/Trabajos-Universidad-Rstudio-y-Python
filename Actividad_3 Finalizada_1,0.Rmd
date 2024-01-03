@@ -1,0 +1,594 @@
+---
+title: "Actividad 3"
+author: "Martinez-Villazón"
+date: "2023-12-09"
+output: 
+  pdf_document:
+    highlight: tango
+---
+
+
+# Librerias
+
+```{r include=FALSE}
+library("astsa")
+library("urca")
+library("forecast")
+library("stargazer")
+library("ggplot2")
+library("reshape2")
+library("tseries")
+library("quantmod")
+library("ggplot2")
+library("dplyr")
+library("tibble")
+library("egcm")
+```
+
+# 1. Simulacion de un proceso AR(3)
+
+
+```{r echo=FALSE}
+set.seed(123)
+y <- arima.sim(model = list(order = c(3, 0, 0), ar = c(0.99, -0.66, -0.25)), n = 300) + 20
+```
+
+
+
+## a. Grafico
+
+Graficamos y comentamos la variable en cuestión
+
+```{r echo=FALSE}
+plot(ts(y,start=1999,frequency =12), 
+     type = "l",    
+     col = "red",  
+     xlab = "year",  
+     ylab = "y", 
+     main = "Serie de Tiempo Y", 
+     pch = 16) 
+
+```
+
+Se observa un proceso de caminata aleatoria, dado a que los datos varia de forma aleatoria. Estos datos se mueven alrededor de una media 20, asi como se modelo en el modelo. Podemos pensar y como esta simulado, que estamos en un proceso de caminata aleatoria con deriva.
+
+
+
+
+## b. ADF
+
+```{r echo=FALSE,results='asis'}
+ur_none <- ur.df(y, type = "none", selectlags = "BIC" )
+stargazer(cbind(t(ur_none@teststat), ur_none@cval),type = "latex", title = "ADF del Modelo AR(3)")
+```
+
+
+Observando la prueba ADF sin observar tendencia y deriva, podemos rechazar la existencia de raiz unitaria al nivel de confianza del 5% y 10% de confianza, podemos rechazar la existencia de raiz unitaria al 1% de confianza ya que el estadistico no es mas negativo que el valor critico. Es recomendable hacer toda la prueba de ADF y evaluar la significancia de tanto la deriva como la tendencia, dado a qe si solo realizamos el modelo sin deriva ni tendencia, no podemos observas si el proceso tiene estos componentes. En este caso no se puede ver que la serie fue modelada con una deriva porque solo realizamos la ultima parte del test.
+
+## c. ACF Y PACF
+
+```{r echo=FALSE,results='hide'}
+
+acf2(y)
+
+```
+
+
+De la acf podemos observar que la serie decrece lentamente, mostrando que poco a poco las correlaciones se van diluyendo. Por otro lado la PACF se comporta segun se describe el modelo, cortandose rapidamente despues del orden p (3). 
+
+## d. Ajuste Arima
+```{r echo=FALSE, include=FALSE}
+y_ajust <- sarima( y , p = 3 , d = 0, q = 0)
+
+
+```
+
+### Coeficientes
+
+```{r echo=FALSE,results='asis'}
+stargazer(y_ajust$ttable,digits = 3,type="latex",title = "Tabla de Coeficientes AR(3)")
+```
+
+Observando las tablas de los coeficientes podemos observar que estos se asemejan bastante a los simulados del modelo. Podemos observar mediante las pruebas t, que para todos los coeficientes rechazamos a hipotesis de que sus valores sean iguales a 0, mostrando significancia para todos los coeficientes al 1% de significancia.
+
+### Graficos de Comportamiento de los Residuales
+
+```{r echo=FALSE, results='hide'}
+y_ajust <- sarima( y , p = 3 , d = 0, q = 0)
+
+
+```
+
+El primer gráfico de "standardized Residuals" podemos ver que los residuales se comportan como si fueran ruido blanco, estos no son muy altos y varían alrededor de una media nula. Por otro lado si observamos la función de auto correlación de los residuos, podemos observar que no se encuentra por fuera de la banda, mostrando que los residuos no se relacionan entre si. Observando el QQplot podemos ver que la mayoría de los datos se distribuyen de forma normal, de todas manera se notifican los datos de las colas que se desvían de los datos, entonces es importante entender la existencia de datos atípicos. Por ultimo, podemos observar que los p valores del Ljung-box son mayores que el 5% de significancia, se sugiere que los datos no se correlacionan entre si, por lo que podemos considerar que los residuos son independientes entre ellos. Por lo que podemos concluir mediante estos gráficos que los residuos son ruido blanco, ya que se cumplen con los principios de independencia y normalidad entre los residuos.
+
+
+# 2. Simulación de un proceso MA(1)
+
+```{r echo=FALSE}
+set.seed(123)
+x <- arima.sim(model = list(order = c(0, 0, 1), ma= c(-0.47)),n=300)
+
+```
+
+## a. Ecuación
+
+$$
+X_t= (-0,47)x_{t-1}+a_t
+$$
+
+## b. Grafico
+
+```{r echo=FALSE}
+plot(ts(x,start=1999,frequency =12), 
+     type = "l",    
+     col = "red",  
+     xlab = "Year",  
+     ylab = "y", 
+     main = "Serie de Tiempo X", 
+     pch = 16) 
+
+```
+
+
+
+## c. ADF
+
+```{r echo=FALSE,results='asis'}
+ur_none <- ur.df(x, type = "none", selectlags = "BIC" )
+stargazer(cbind(t(ur_none@teststat), ur_none@cval),type = "latex",title = "ADF para el modelo MA(1)")
+```
+
+
+Observando la prueba ADF sin observar tendencia y deriva, podemos rechazar la existencia de raiz unitaria al nivel de confianza del 1%,5% y 10% de confianza, el estadístico  mas negativo que el valor critico. Es recomendable hacer toda la prueba de ADF y evaluar la significancia de tanto la deriva como la tendencia, dado a qe si solo realizamos el modelo sin deriva ni tendencia, no podemos observas si el proceso tiene estos componentes. En este caso no se puede ver que la serie fue modelada con una deriva porque solo realizamos la ultima parte del test.
+
+## d. ACF y PACF
+
+```{r echo=FALSE,results='hide'}
+
+acf2(x)
+
+```
+
+De la PACF podemos observar que la serie decrece lentamente. Por otro lado la ACF se comporta segun se describe el modelo, cortándose rápidamente después del orden q(1). 
+
+## e. Modelo ajustado
+
+```{r echo=FALSE,include=FALSE}
+x_ajust <- sarima( x , p = 0 , d = 0, q = 1)
+
+```
+
+### Coeficientes
+
+```{r echo=FALSE,results='asis'}
+stargazer(x_ajust$ttable,digits = 3,type="latex",title = "Tabla de Coeficientes para el modelo MA(1)")
+
+```
+
+Observando las tablas de los coeficientes podemos observar que estos se asemejan bastante a los simulados del modelo. Podemos observar mediante las pruebas t, que para el primer coeficiente rechazamos a hipotesis de que sus valores sean iguales a 0, mostrando significancia para el  coeficientes al 1% de significancia. Por otro lado la constante o media con un p valor del 99%, no tiene suficiente evidencia para rechazar que esta sea igual a cero, descartando la posibilidad se que esta variable sea significante.
+
+### Graficos del Comportamiento de los Residuales
+
+```{r echo=FALSE,results='hide'}
+x_ajust <- sarima( x , p = 0 , d = 0, q = 1)
+
+```
+
+El primer gráfico de "standardized Residuals" podemos ver que los residuales se comportan como si fueran ruido blanco, estos no son muy altos y varían alrededor de una media nula. Por otro lado si observamos la función de auto correlación de los residuos, podemos observar que no se encuentra por fuera de la banda, mostrando que los residuos no se relacionan entre si. Observando el QQplot podemos ver que la mayoría de los datos se distribuyen de forma normal, de todas manera se notifican los datos de las colas que se desvían de los datos, entonces es importante entender la existencia de datos atípicos. Por ultimo, podemos observar que los p valores del Ljung-box son mayores que el 5% de significancia, se sugiere que los datos no se correlacionan entre si, por lo que podemos considerar que los residuos son independientes entre ellos. Por lo que podemos concluir mediante estos gráficos que los residuos son ruido blanco, ya que se cumplen con los principios de independencia y normalidad entre los residuos.
+
+# 3. Simulación de un proceso ARMA (1,2)
+
+```{r echo=FALSE}
+set.seed(124)
+z <- arima.sim(model = list(order = c(1,0,2) , ar =c(0.7), ma = c(-0.3,0.8)), n =300)
+```
+
+## a. Ecuación
+
+$$
+z_t= 0,7y_{t-1}-0,3x_{t-1}+0,8_{t-2}+a_t
+$$
+
+
+## b. Grafico
+
+```{r echo=FALSE}
+plot(ts(z ,start=1999,frequency =12), 
+     type = "l",    
+     col = "red",  
+     xlab = "year",  
+     ylab = "y", 
+     main = "Serie de Tiempo Z", 
+     pch = 16)
+```
+
+
+## c. ADF
+```{r echo=FALSE,results='asis'}
+ur_none <- ur.df(z, type = "none", selectlags = "BIC" )
+stargazer(cbind(t(ur_none@teststat), ur_none@cval),type = "latex", title = "ADF para el modelo ARMA(1,2)")
+```
+
+
+Observando la prueba ADF sin observar tendencia y deriva, podemos rechazar la existencia de raiz unitaria al nivel de confianza del 1%,5% y 10% de confianza, el estadístico  mas negativo que el valor critico. Es recomendable hacer toda la prueba de ADF y evaluar la significancia de tanto la deriva como la tendencia, dado a qe si solo realizamos el modelo sin deriva ni tendencia, no podemos observas si el proceso tiene estos componentes. En este caso no se puede ver que la serie fue modelada con una deriva porque solo realizamos la ultima parte del test.
+
+## d. ACF Y PACF
+
+```{r echo=FALSE,results='hide'}
+
+acf2(z)
+
+```
+
+
+En este caso podemos observar que tanto la PCF como la ACF se diluyen lentamente con el tiempo, entorno a 6 lag las autocorrelaciones entran dentro de las bandas. Por lo tanto es importante observar el metodo de la grilla.
+
+## e. Matriz AIC
+
+```{r echo=FALSE, include=FALSE}
+
+# Algoritmo para seleccionar ARMA(p,q)
+# Cree los vectores con los nombres de filas y columnas
+p_values <- c("p1", "p2", "p3")
+q_values <- c("q1", "q2", "q3")
+# Cree una matriz para almacenar los valores AIC
+aic_matrix <- matrix(NA, nrow = length(p_values), ncol = length(q_values),
+ dimnames = list(p_values, q_values))
+# loop sobre los p
+for (i in 1:3) {
+ 
+ # Loop sobre los q
+for (j in 1:3) {
+ 
+ 
+ # Ajuste el SARIMA(p,q)
+ arma_model <- sarima(z, p = i, d = 0, q = j)
+ 
+ # Almacene el AIC de cada modelo
+ aic_matrix[i, j] <- arma_model$AIC
+}
+}
+
+
+```
+
+```{r echo=FALSE,results='asis'}
+stargazer(aic_matrix,type = "latex",digits = 3,title = "Matriz ARMA AIC" )
+```
+Valor mínimo de la matriz
+
+```{r echo=FALSE,results='asis'}
+min <- as.matrix(min(aic_matrix))
+
+rownames(min)[1] <- rownames(aic_matrix)[1]
+
+colnames(min)[1] <- colnames(aic_matrix)[min(aic_matrix)]
+
+stargazer(min,type="latex",title = "Valor minimo de matriz AIC")
+
+```
+
+De la matriz AIC se puede observar que el p,q de el modelo ARMA que mas se ajusta a la serie de datos es el ARMA (1,2) 
+
+## f. Matriz Ljung-Box
+
+
+```{r echo=FALSE,results='asis',warning=FALSE}
+
+ljb <- matrix(NA, nrow = length(p_values), ncol = length(q_values),
+ dimnames = list(p_values, q_values))
+# Revise el Ljung - Box para cada modelo
+# loop sobre los p
+for (i in 1:3) {
+ 
+ # Loop sobre los q
+ for (j in 1:3) {
+ 
+ 
+ # Ajuste el SARIMA(p,q)
+# Mire que el parámetro details en FALSE nos evita ver
+# El proceso de optimización, pero en este caso no podemos
+# Ver las gráficas, si las necesita pued usar TRUE u omitir.
+ arma_model <- sarima(z, p = i, d = 0, q = j, details = FALSE)
+ 
+ # Tome los residuales de cada modelo
+ residuals <- resid(arma_model$fit)
+ 
+ # Imprima el test para cada modelo
+ 
+
+ ljb[i, j] <-(Box.test(residuals, lag = 15, type = "Ljung-Box")$p.value)
+ }
+  
+}
+  stargazer(ljb,type = "latex",digits=2,title = "P valores del Test Ljung-BOX para los modelos ARMA(P,Q)")
+```
+
+Observando los p valores del test Ljung box para los distintos modelos ARMA, podemos observar que para todos los modelos ARMA(1,1-3), exhibe suficiente evidencia para decir que los residuos son dependientes ya que rechazamos la hipótesis nula dado a que su p valores son técnicamente 0, por otro lado los demás modelos ARMA, no existe suficiente evidencia para rechazar la independencia entre los residuos. Para nuestro caso de interés, podemos sugerir que el ARMA (1,2) tiene residuos que actúan de forma independiente entre ellos. Esto nos da indicios de que el modelo tiene ruido blanco.
+
+
+# 4.
+
+## Importar datos
+```{r include=FALSE}
+data<- read.csv(file.choose())
+View(data)
+```
+## a.
+```{r echo=FALSE}
+
+
+# Calcular la columna jap_perc_us como el PIB de Japón en porcentaje del PIB de EE.UU.
+data$jap_perc_us <- (data$Japan / data$US) * 100
+
+# Crear una serie de tiempo
+serie <- ts(data$jap_perc_us, start = data$Year[1], frequency = 1)
+
+# Graficar la serie de tiempo
+plot(serie, type="l", col="blue", xlab="Años", ylab="PIB Japón en proporción a  USA",
+     main="PIB Japón en proporción a  USA a lo largo del tiempo")
+
+
+
+```
+
+## B.
+```{r echo=FALSE}
+
+ts_japon <- ts(data$Japan, start = min(data$Year), end = max(data$Year), frequency = 1)
+
+# Graficar la serie de tiempo
+plot(ts_japon, xlab = "Año", ylab = "PIB de Japón (en billones de dólares de 2020)", type = "l")
+
+
+
+
+
+```
+## C.
+```{r echo=FALSE}
+# Realizar la prueba ADF
+
+adf_test_result <- adf.test(ts_japon)
+
+# Presentar los resultados
+print(adf_test_result)
+
+
+```
+
+```{r echo=FALSE}
+# Concluir basado en el valor p de la prueba
+if (adf_test_result$p.value < 0.05) {
+    cat("La serie es estacionaria, se rechaza la hipótesis nula de raíz unitaria.\n")
+} else {
+    cat("La serie no es estacionaria, no se rechaza la hipótesis nula de raíz unitaria.\n")
+}
+
+```
+
+El valor p resultante de la prueba ADF para la serie de tiempo del PIB de Japón es de 0.9377, lo que es significativamente mayor que el nivel de significancia común de 0.05. Un valor p alto sugiere que no hay suficiente evidencia para rechazar la hipótesis nula de la prueba ADF, que postula que la serie de tiempo posee una raíz unitaria y por lo tanto es no estacionaria. Dado que la serie no es estacionaria, esto implica que el PIB de Japón muestra tendencias, ciclos, volatilidad en la varianza, o una combinación de estos a lo largo del tiempo. Estas características podrían ser el resultado de factores económicos subyacentes, tales como el crecimiento económico a largo plazo, ciclos económicos, cambios en la política económica o eventos externos que afectan la economía. 
+
+## D.
+```{r echo=FALSE}
+
+data$Year <- as.numeric(as.character(data$Year))
+
+# Realizar una regresión lineal para estimar la tendencia
+tendencia <- lm(Japan ~ Year, data = data)
+
+# Graficar la serie de tiempo y añadir la línea de tendencia
+ggplot(data, aes(x = Year, y = Japan)) +
+  geom_line() +
+  geom_smooth(method = "lm", col = "red") +
+  labs(x = "Año", y = "PIB de Japón", title = "PIB de Japón con Tendencia Lineal") +
+  theme_minimal()
+
+```
+## E.
+```{r echo=FALSE}
+# Extraer los residuos, que representan la serie sin la tendencia
+data$Japan_sintend <- resid(tendencia)
+
+# convertir los residuos en una serie de tiempo para análisis posteriores
+ts_japan_sintend <- ts(data$Japan_sintend, start = min(data$Year), frequency = 1)
+
+# Graficar la serie de tiempo original y la serie de tiempo sin tendencia
+plot(data$Year, data$Japan_sintend, type = "l", col = "blue", xlab = "Año", ylab = "PIB de Japón", main = "PIB de Japón Original y sin Tendencia")
+abline(h = 0, col = "red", lwd = 2)
+
+```
+
+## F.
+```{r echo=FALSE}
+# Realizar la prueba ADF en la serie sin tendencia
+adf.result <- adf.test(ts_japan_sintend)
+
+# Mostrar los resultados de la prueba ADF
+print(adf.result)
+
+
+
+```
+```{r echo=FALSE}
+if (adf_test_result$p.value < 0.05) {
+    cat("La serie sin tendencia es estacionaria. Se rechaza la hipótesis 
+        nula de raíz unitaria con un nivel de confianza del 95%.\n")
+} else {
+    cat("La serie sin tendencia no es estacionaria. No se rechaza la hipótesis 
+        nula de raíz unitaria con un nivel de confianza del 95%.\n")
+}
+
+```
+
+Un valor p de 0.9377 es mucho mayor que el umbral común de 0.05, lo que significa que no hay suficiente evidencia estadística para rechazar la hipótesis nula de que existe una raíz unitaria. En otras palabras, incluso después de haber quitado la tendencia lineal de la serie de tiempo del PIB de Japón, la serie detrended no parece ser estacionaria.
+
+Una conclusión detallada de estos resultados sería que, a pesar de que se ha eliminado la tendencia lineal, hay otros factores no capturados que están causando que la serie temporal sea no estacionaria. Esto podría deberse a componentes estacionales no ajustados, cambios estructurales en la economía que no son lineales o simplemente a una alta variabilidad intrínseca en los datos que no está relacionada con la tendencia. También podría sugerir que la serie temporal podría tener una tendencia estocástica en lugar de una tendencia determinista, lo que significa que la tendencia no es una función lineal del tiempo y puede ser más difícil de modelar y predecir.
+
+## G.
+```{r echo=FALSE}
+# Calcular el logaritmo natural de la serie de tiempo del PIB de Japón
+log_Japan <- log(data$Japan)
+
+# Calcular la primera diferencia logarítmica
+log_diff_Japan <- diff(log_Japan)
+
+# Crear una serie de tiempo omitiendo la primera observación
+ts_log_diff_Japan <- ts(log_diff_Japan, start = data$Year[2], frequency = 1)
+
+# Graficar la primera diferencia logarítmica
+plot(ts_log_diff_Japan, type = "l", xlab = "Año", ylab = "Primera Diferencia Logarítmica del PIB de Japón", main = "Primera Diferencia Logarítmica")
+
+```
+
+## H.
+```{r echo=FALSE}
+# Realizar la prueba ADF
+adf_test_result <- adf.test(ts_log_diff_Japan)
+
+# Mostrar los resultados de la prueba ADF
+print(adf_test_result)
+
+
+```
+```{r echo=FALSE}
+# Comentar los resultados
+# Un valor p bajo (generalmente < 0.05) indica estacionariedad
+if (adf_test_result$p.value < 0.05) {
+    cat("La serie sin tendencia es estacionaria. 
+Se rechaza la hipótesis nula de raíz unitaria con un nivel de confianza del 95%.\n")
+} else {
+    cat("La serie sin tendencia no es estacionaria. 
+        No se rechaza la hipótesis nula de raíz unitaria con un nivel de confianza del 95%.\n")
+}
+```
+
+La prueba Augmented Dickey-Fuller (ADF) proporciona un resultado con un valor estadístico de -3.8302, y un valor p de 0.02023. La hipótesis alternativa establecida en la prueba es que la serie de tiempo es estacionaria.
+
+El valor estadístico de la prueba ADF es una medida de la fuerza con la que la serie de tiempo puede ser considerada estacionaria. Cuanto más negativo sea este valor, más fuerte es la evidencia contra la hipótesis nula de que la serie tiene una raíz unitaria (y por tanto, es no estacionaria).El valor p de la prueba ADF es el criterio por el cual decidimos si rechazar o no la hipótesis nula. En este caso, el valor p es 0.02023, que está por debajo del umbral común de 0.05. Esto significa que hay suficiente evidencia estadística para rechazar la hipótesis nula a un nivel de significancia del 5%. En otras palabras, es poco probable que el resultado sea una casualidad si la hipótesis nula fuera cierta. Vale recalcar que puede existir raiz unitaria al 1% de significancia.
+
+La conclusión de estos resultados es que, después de tomar la primera diferencia logarítmica de la serie de tiempo del PIB de Japón, la serie resultante puede ser considerada estacionaria. Esto implica que, al transformar los datos de esta manera, se ha eliminado efectivamente cualquier tendencia o raíz unitaria presente en la serie de tiempo original, lo que significa que la serie diferenciada no muestra dependencias a largo plazo y sus propiedades estadísticas (como la media y la varianza) no cambian a lo largo del tiempo.
+
+## I.
+
+### identificar el modelo
+```{r echo=FALSE,results='asis',warning=FALSE}
+library(forecast)
+
+# Crear los vectores con los nombres de filas y columnas
+p_values <- c("p1", "p2", "p3")  
+q_values <- c("q1", "q2", "q3")  
+
+# Crear una matriz para almacenar los valores AIC
+aic_matrix <- matrix(NA, nrow = length(p_values), ncol = length(q_values), 
+                     dimnames = list(p_values, q_values))
+
+# Loop sobre los valores p
+for (i in 1:3) {
+  # Loop sobre los valores q
+  for (j in 1:3) {
+    # Ajustar el modelo ARIMA(p,0,q)
+    arma_model <- Arima(ts_log_diff_Japan, order = c(i, 0, j))
+    
+    # Almacenar el AIC de cada modelo
+    aic_matrix[i, j] <- arma_model$aic
+  }
+}
+
+# Imprimir la matriz AIC
+ stargazer(aic_matrix,type = "latex",digits=2,title = "Matriz AIC")
+
+
+
+```
+```{r echo=FALSE}
+# Encontrar el modelo con el AIC más bajo
+min_aic <- which(aic_matrix == min(aic_matrix), arr.ind = TRUE)
+best_p <- min_aic[1]
+best_q <- min_aic[2]
+
+cat(sprintf("El mejor modelo ARMA es ARMA(%d,0,%d) con un AIC de %f\n", best_p, best_q, min(aic_matrix)))
+
+
+```
+
+
+### Verificar los residuos
+```{r echo=FALSE}
+barma_model <- arima(ts_log_diff_Japan, order = c(1, 0, 1))
+checkresiduals(barma_model)
+
+```
+La caída en los residuos al principio puede indicar un evento atípico o un punto de cambio, el cual fue la segunda Guerra mundial.La ACF no muestra evidencia de autocorrelaciones significativas a ningún retraso, lo cual es una indicación de que el modelo ha capturado bien la estructura de dependencia temporal de la serie de tiempo.
+La distribución de los residuos se asemeja a una distribución normal basada en el histograma y la curva de densidad, lo cual es otro punto a favor del modelo ajustado.
+
+### Prueba de Ljung-Box en los residuos para verificar la autocorrelación
+```{r echo=FALSE}
+Box.test(residuals(barma_model), lag = log(length(ts_log_diff_Japan)))
+```
+La prueba de Box-Pierce se utiliza para determinar si los residuos de un modelo ajustado son independientes, lo cual es un requisito para un buen modelo ARIMA. La independencia implica que los residuos no tienen autocorrelaciones en ningún retraso, lo que significaría que el modelo ha capturado toda la estructura de autocorrelación de la serie temporal.Dado que el valor p es mucho mayor que 0.05, no rechazamos la hipótesis nula de la prueba de Box-Pierce, que establece que los residuos son independientes. En otras palabras, no hay evidencia de autocorrelaciones significativas en los residuos del modelo, y esto sugiere que el modelo ARIMA utilizado ha hecho un buen trabajo al capturar la información en los datos. Los residuos pueden considerarse ruido blanco, que es lo que se desea al ajustar modelos de series temporales.
+
+
+## J.
+```{r echo=FALSE}
+
+
+# Graficar la predicción
+forecast <- forecast(barma_model)  
+
+plot(forecast, main="Pronóstico de 2 Años para la serie", xlab="Tiempo", ylab="Valor Pronosticado")
+legend("topright", legend=c("Línea de Pronóstico"), col="lightblue", lty=1, cex=0.8)
+
+
+```
+
+
+
+
+
+## 5.
+
+```{r echo=FALSE}
+
+inicio <- as.Date("2015-01-01")
+fin <- as.Date("2023-01-01") 
+
+nvda <- getSymbols("NVDA", src = "yahoo", from = inicio, to = fin, auto.assign = FALSE)
+amd <- getSymbols("AMD", src = "yahoo", from = inicio, to = fin, auto.assign = FALSE)
+
+
+nvda_df <- data.frame(Date = index(nvda), Adjusted = as.numeric(Ad(nvda)), Stock = 'NVDA')
+amd_df <- data.frame(Date = index(amd), Adjusted = as.numeric(Ad(amd)), Stock = 'AMD')
+
+# Combinar los data frames en uno solo
+acciones<- rbind(nvda_df, amd_df)
+# Asegurarse de que Date es del tipo Date en el nuevo data frame
+acciones$Date <- as.Date(acciones$Date)
+
+# Graficar con ggplot2
+ggplot(acciones, aes(x = Date, y = Adjusted, color = Stock)) +
+  geom_line() +
+  labs(title = "NVIDIA vs AMD ", x = "Date", y = "Precio de cierre") +
+  scale_color_manual(values = c("NVDA" = "green", "AMD" = "orange")) +
+  theme_minimal()
+
+
+```
+
+### Prueba de cointegración
+
+```{r echo=FALSE}
+
+amd_zoo <- zoo(amd_df$Adjusted)
+nvd_zoo <- zoo(nvda_df$Adjusted)
+
+res_eg <- egcm(amd_zoo,nvd_zoo)
+
+summary(res_eg)
+```
+
+En primer lugar, es importante analizar es que la acción de AMD y Nvidia no parecen estar cointegrados", lo que significa que no hay una relación de equilibrio a largo plazo entre las dos series de precios de acciones. Esto se ve apoyado por la mayoría de los valores p de las pruebas de raíz unitaria, que están por encima de 0.05, indicando que no podemos rechazar la hipótesis nula de que los residuos son no estacionarios (excepto en el caso de ERSD).
+
+El resultado de ERSD es interesante porque es el único test que sugiere la posibilidad de estacionariedad en los residuos. Sin embargo, dado que la mayoría de las pruebas sugieren lo contrario, y la prueba  de Johansen, que es específica para la cointegración, también acepta la hipótesis nula, la evidencia general sugiere que las series no están cointegradas.
+
+Finalmente, aunque un test indica estacionariedad, la mayoría no lo hace, y la advertencia de la función sugiere que no deberíamos considerar estas dos acciones como cointegradas. Por lo tanto, no serían candidatas ideales para una estrategia de pares de trading. En el trading de pares, buscamos pares de acciones que se muevan juntos a lo largo del tiempo, de modo que cuando el spread entre ellas se desvíe de su media histórica, podamos esperar que converja de nuevo. Estos resultados indican que no podemos tener confianza en tal convergencia para este par de acciones específico.
